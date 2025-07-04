@@ -19,6 +19,54 @@ interface ApiSearchItem {
   type_name?: string;
 }
 
+// 提取并处理剧集链接的辅助函数
+function extractEpisodes(playUrl?: string): string[] {
+  if (!playUrl) {
+    return [];
+  }
+
+  let episodes: string[] = [];
+  const m3u8Regex = /\$(https?:\/\/[^"'\s]+?\.m3u8)/g;
+
+  // 使用 $$$ 分割不同的播放源
+  const playUrlParts = playUrl.split('$$$');
+
+  // 遍历每个播放源部分，找到包含最多 m3u8 链接的部分
+  playUrlParts.forEach((part: string) => {
+    const matches = part.match(m3u8Regex) || [];
+    if (matches.length > episodes.length) {
+      episodes = matches;
+    }
+  });
+
+  // 去重并清理链接
+  return Array.from(new Set(episodes)).map((link: string) => {
+    link = link.substring(1); // 去掉开头的 $
+    const parenIndex = link.indexOf('(');
+    return parenIndex > 0 ? link.substring(0, parenIndex) : link;
+  });
+}
+
+// 将 API item 转换为 SearchResult 的辅助函数
+function mapApiItemToSearchResult(
+  item: ApiSearchItem,
+  apiSite: ApiSite
+): SearchResult {
+  return {
+    id: item.vod_id,
+    title: item.vod_name.trim().replace(/\s+/g, ' '),
+    poster: item.vod_pic,
+    episodes: extractEpisodes(item.vod_play_url),
+    source: apiSite.key,
+    source_name: apiSite.name,
+    class: item.vod_class,
+    year: item.vod_year ? item.vod_year.match(/\d{4}/)?.[0] || '' : '',
+    desc: cleanHtmlTags(item.vod_content || ''),
+    type_name: item.type_name,
+    douban_id: item.vod_douban_id,
+  };
+}
+
 export async function searchFromApi(
   apiSite: ApiSite,
   query: string
@@ -29,7 +77,6 @@ export async function searchFromApi(
       apiBaseUrl + API_CONFIG.search.path + encodeURIComponent(query);
     const apiName = apiSite.name;
 
-    // 添加超时处理
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
 
@@ -54,50 +101,14 @@ export async function searchFromApi(
       return [];
     }
     // 处理第一页结果
-    const results = data.list.map((item: ApiSearchItem) => {
-      let episodes: string[] = [];
-
-      // 使用正则表达式从 vod_play_url 提取 m3u8 链接
-      if (item.vod_play_url) {
-        const m3u8Regex = /\$(https?:\/\/[^"'\s]+?\.m3u8)/g;
-        // 先用 $$$ 分割
-        const vod_play_url_array = item.vod_play_url.split('$$$');
-        // 对每个分片做匹配，取匹配到最多的作为结果
-        vod_play_url_array.forEach((url: string) => {
-          const matches = url.match(m3u8Regex) || [];
-          if (matches.length > episodes.length) {
-            episodes = matches;
-          }
-        });
-      }
-
-      episodes = Array.from(new Set(episodes)).map((link: string) => {
-        link = link.substring(1); // 去掉开头的 $
-        const parenIndex = link.indexOf('(');
-        return parenIndex > 0 ? link.substring(0, parenIndex) : link;
-      });
-
-      return {
-        id: item.vod_id,
-        title: item.vod_name.trim().replace(/\s+/g, ' '),
-        poster: item.vod_pic,
-        episodes,
-        source: apiSite.key,
-        source_name: apiName,
-        class: item.vod_class,
-        year: item.vod_year ? item.vod_year.match(/\d{4}/)?.[0] || '' : '',
-        desc: cleanHtmlTags(item.vod_content || ''),
-        type_name: item.type_name,
-        douban_id: item.vod_douban_id,
-      };
-    });
+    const results = data.list.map((item: ApiSearchItem) =>
+      mapApiItemToSearchResult(item, apiSite)
+    );
 
     // 获取总页数
     const pageCount = data.pagecount || 1;
-    // 确定需要获取的额外页数
     const pagesToFetch = Math.min(pageCount - 1, MAX_SEARCH_PAGES - 1);
 
-    // 如果有额外页数，获取更多页的结果
     if (pagesToFetch > 0) {
       const additionalPagePromises = [];
 
@@ -130,37 +141,11 @@ export async function searchFromApi(
             if (!pageData || !pageData.list || !Array.isArray(pageData.list))
               return [];
 
-            return pageData.list.map((item: ApiSearchItem) => {
-              let episodes: string[] = [];
-
-              // 使用正则表达式从 vod_play_url 提取 m3u8 链接
-              if (item.vod_play_url) {
-                const m3u8Regex = /\$(https?:\/\/[^"'\s]+?\.m3u8)/g;
-                episodes = item.vod_play_url.match(m3u8Regex) || [];
-              }
-
-              episodes = Array.from(new Set(episodes)).map((link: string) => {
-                link = link.substring(1); // 去掉开头的 $
-                const parenIndex = link.indexOf('(');
-                return parenIndex > 0 ? link.substring(0, parenIndex) : link;
-              });
-
-              return {
-                id: item.vod_id,
-                title: item.vod_name.trim().replace(/\s+/g, ' '),
-                poster: item.vod_pic,
-                episodes,
-                source: apiSite.key,
-                source_name: apiName,
-                class: item.vod_class,
-                year: item.vod_year
-                  ? item.vod_year.match(/\d{4}/)?.[0] || ''
-                  : '',
-                desc: cleanHtmlTags(item.vod_content || ''),
-                type_name: item.type_name,
-                douban_id: item.vod_douban_id,
-              };
-            });
+            // ***【重要修复】***
+            // 此处使用与第一页相同的处理逻辑，确保分页数据正确解析
+            return pageData.list.map((item: ApiSearchItem) =>
+              mapApiItemToSearchResult(item, apiSite)
+            );
           } catch (error) {
             return [];
           }
@@ -169,10 +154,8 @@ export async function searchFromApi(
         additionalPagePromises.push(pagePromise);
       }
 
-      // 等待所有额外页的结果
       const additionalResults = await Promise.all(additionalPagePromises);
 
-      // 合并所有页的结果
       additionalResults.forEach((pageResults) => {
         if (pageResults.length > 0) {
           results.push(...pageResults);
