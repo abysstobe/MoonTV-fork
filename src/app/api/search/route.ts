@@ -1,31 +1,36 @@
 import { NextResponse } from 'next/server';
 
-import { getApiSites, getCacheTime } from '@/lib/config';
+import { ApiSite, getApiSites, getCacheTime } from '@/lib/config';
 import { searchFromApi } from '@/lib/downstream';
+import { SearchResult } from '@/lib/types';
 
 export const runtime = 'edge';
 
 /**
- * [新增功能] 这是一个辅助函数，用于执行一次完整的搜索。
- * 增强的搜索逻辑会多次调用它。
+ * 封装的搜索执行函数
+ * @param query - 搜索关键词
+ * @param apiSites - API 站点列表
+ * @returns 扁平化的搜索结果数组
  */
-async function performSearch(query: string): Promise<SearchResult[]> {
-  const apiSites = getApiSites();
+async function performSearch(
+  query: string,
+  apiSites: ApiSite[]
+): Promise<SearchResult[]> {
+  // 如果关键词为空，直接返回空数组，避免无效请求
+  if (!query || query.trim() === '') {
+    return [];
+  }
   const searchPromises = apiSites.map((site) => searchFromApi(site, query));
   const results = await Promise.all(searchPromises);
   return results.flat();
 }
 
-/**
- * [核心修改] 这是带有增强搜索逻辑的主函数。
- * 它会按顺序尝试多种搜索方式，以提高成功率。
- */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const originalQuery = searchParams.get('q');
+  const cacheTime = getCacheTime();
 
   if (!originalQuery) {
-    const cacheTime = getCacheTime();
     return NextResponse.json(
       { results: [] },
       {
@@ -36,45 +41,55 @@ export async function GET(request: Request) {
     );
   }
 
+  const apiSites = getApiSites();
+
   try {
-    // --- 增强的搜索回退逻辑 ---
+    // 第一次搜索：使用原始关键词
+    let finalResults = await performSearch(originalQuery, apiSites);
 
-    // 1. 第一次搜索：使用用户输入的原始关键词
-    console.info(`[Search] 1. Starting initial search for: "${originalQuery}"`);
-    let finalResults = await performSearch(originalQuery);
+    // --- 搜索回退逻辑开始 ---
 
-    // 定义用于分割关键词的特殊字符
-    // 下面这行是关键！我们恢复了正确的正则表达式，并用注释告诉编译器忽略这里的“错误”告警。
-    // eslint-disable-next-line no-useless-escape
-    const separatorRegex = /[ \.·:：～~—_@，,\[\]!！\-]/;
+    // 条件：第一次搜索结果为空
+    if (finalResults.length === 0) {
+      // 定义特殊符号的正则表达式
+      const specialCharRegex = /[\s\.·:：～~—_@,\[\]!！\-]/;
 
-    // 2. 第二次搜索（回退 #1）：如果首次搜索无结果，且关键词中包含特殊字符，则尝试简化关键词
-    if (finalResults.length === 0 && separatorRegex.test(originalQuery)) {
-      const queryForFallback1 = originalQuery.split(separatorRegex)[0].trim();
+      // 条件：原始关键词包含特殊符号
+      if (specialCharRegex.test(originalQuery)) {
+        // 简化关键词，只取第一个特殊符号前的内容
+        const simplifiedQuery = originalQuery.split(specialCharRegex)[0];
 
-      // 确保简化后的关键词有效且与原始的不同
-      if (queryForFallback1 && queryForFallback1 !== originalQuery) {
-        console.info(`[Search] 2. Fallback #1 (split by symbol): "${queryForFallback1}"`);
-        finalResults = await performSearch(queryForFallback1);
+        // 确保简化后的关键词有效且与原始词不同
+        if (simplifiedQuery && simplifiedQuery !== originalQuery) {
+          console.log(
+            `[Search Fallback 1] No results for "${originalQuery}", trying simplified query: "${simplifiedQuery}"`
+          );
+          // 第二次搜索：使用简化后的关键词
+          finalResults = await performSearch(simplifiedQuery, apiSites);
 
-        // 3. 第三次搜索（回退 #2）：如果第二次搜索仍无结果，且关键词中包含数字，则尝试移除数字
-        const hasNumbersRegex = /\d/;
-        if (
-          finalResults.length === 0 &&
-          hasNumbersRegex.test(queryForFallback1)
-        ) {
-          const queryForFallback2 = queryForFallback1.replace(/\d/g, '').trim();
+          // 条件：第二次搜索结果仍为空
+          if (finalResults.length === 0) {
+            const digitRegex = /\d/;
+            // 条件：简化后的关键词包含数字
+            if (digitRegex.test(simplifiedQuery)) {
+              // 去除所有数字
+              const digitlessQuery = simplifiedQuery.replace(/\d/g, '');
 
-          // 确保再次简化后的关键词有效
-          if (queryForFallback2 && queryForFallback2 !== queryForFallback1) {
-            console.info(`[Search] 3. Fallback #2 (remove numbers): "${queryForFallback2}"`);
-            finalResults = await performSearch(queryForFallback2);
+              // 确保去除数字后关键词仍有效
+              if (digitlessQuery) {
+                console.log(
+                  `[Search Fallback 2] No results for "${simplifiedQuery}", trying digit-less query: "${digitlessQuery}"`
+                );
+                // 第三次搜索：使用去除数字后的关键词
+                finalResults = await performSearch(digitlessQuery, apiSites);
+              }
+            }
           }
         }
       }
     }
+    // --- 搜索回退逻辑结束 ---
 
-    const cacheTime = getCacheTime();
     return NextResponse.json(
       { results: finalResults },
       {
@@ -84,7 +99,7 @@ export async function GET(request: Request) {
       }
     );
   } catch (error) {
-
+    console.error('Search failed:', error);
     return NextResponse.json({ error: '搜索失败' }, { status: 500 });
   }
 }
