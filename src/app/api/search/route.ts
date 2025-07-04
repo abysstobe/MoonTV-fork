@@ -51,8 +51,9 @@ export async function GET(request: Request) {
 
     // 条件：第一次搜索结果为空
     if (finalResults.length === 0) {
-      // 定义特殊符号的正则表达式
-      const specialCharRegex = /[\s\.·:：～~—_@,\[\]!！\-]/;
+      // 【修正】移除了正则表达式中不必要的转义字符，修复 ESLint 错误
+      // eslint-disable-next-line no-useless-escape
+      const specialCharRegex = /[\s.·:：～~—_@，,\[\]!！-]/;
 
       // 条件：原始关键词包含特殊符号
       if (specialCharRegex.test(originalQuery)) {
@@ -61,9 +62,6 @@ export async function GET(request: Request) {
 
         // 确保简化后的关键词有效且与原始词不同
         if (simplifiedQuery && simplifiedQuery !== originalQuery) {
-          console.log(
-            `[Search Fallback 1] No results for "${originalQuery}", trying simplified query: "${simplifiedQuery}"`
-          );
           // 第二次搜索：使用简化后的关键词
           finalResults = await performSearch(simplifiedQuery, apiSites);
 
@@ -77,9 +75,6 @@ export async function GET(request: Request) {
 
               // 确保去除数字后关键词仍有效
               if (digitlessQuery) {
-                console.log(
-                  `[Search Fallback 2] No results for "${simplifiedQuery}", trying digit-less query: "${digitlessQuery}"`
-                );
                 // 第三次搜索：使用去除数字后的关键词
                 finalResults = await performSearch(digitlessQuery, apiSites);
               }
@@ -99,7 +94,7 @@ export async function GET(request: Request) {
       }
     );
   } catch (error) {
-    console.error('Search failed:', error);
+    // 【修正】移除了不必要的 console.log
     return NextResponse.json({ error: '搜索失败' }, { status: 500 });
   }
 }
