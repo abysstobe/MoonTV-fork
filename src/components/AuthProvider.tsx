@@ -1,11 +1,7 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
-
-import { ThemeToggle } from '@/components/ThemeToggle';
-
-import { useSite } from './SiteProvider';
+import { useEffect, useState } from 'react';
 
 interface Props {
   children: React.ReactNode;
@@ -14,68 +10,76 @@ interface Props {
 export default function AuthProvider({ children }: Props) {
   const router = useRouter();
   const pathname = usePathname();
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-  const { siteName } = useSite();
-  const authenticate = useCallback(async () => {
-    // 登录页
-    if (pathname.startsWith('/login') || pathname.startsWith('/api')) {
-      setIsAuthenticated(true);
-      return;
-    }
 
-    // 从localStorage获取密码和用户名
-    const password = localStorage.getItem('password');
-    const username = localStorage.getItem('username');
-    const fullPath =
-      typeof window !== 'undefined'
-        ? window.location.pathname + window.location.search
-        : pathname;
-
-    // 尝试认证
-    try {
-      const res = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password, username }),
-      });
-
-      if (!res.ok) throw new Error('认证失败');
-
-      setIsAuthenticated(true);
-    } catch (error) {
-      // 认证失败，清理并跳转登录
-      setIsAuthenticated(false);
-      localStorage.removeItem('password');
-      localStorage.removeItem('username');
-      router.replace(`/login?redirect=${encodeURIComponent(fullPath)}`);
-    }
-  }, [pathname, router]);
+  // 关键改动(1): 使用一个更明确的状态来管理认证流程
+  // 'verifying': 初始状态，服务器和客户端首次渲染时都处于此状态，避免不匹配。
+  // 'authenticated': 验证通过。
+  // 'unauthenticated': 验证失败或未登录。
+  const [authStatus, setAuthStatus] = useState<
+    'verifying' | 'authenticated' | 'unauthenticated'
+  >('verifying');
 
   useEffect(() => {
-    authenticate();
-  }, [pathname, authenticate]);
+    // 这个 effect 只在客户端运行，现在可以安全地访问 localStorage
+    const verifyAuth = async () => {
+      // 登录页或API路由是公共的，直接视为“已认证”以允许渲染
+      if (pathname.startsWith('/login') || pathname.startsWith('/api')) {
+        setAuthStatus('authenticated');
+        return;
+      }
 
-  // 认证状态未知时显示加载状态
-  if (!isAuthenticated) {
-    return (
-      <div className='relative min-h-screen flex items-center justify-center px-4 overflow-hidden'>
-        <div className='absolute top-4 right-4'>
-          <ThemeToggle />
-        </div>
-        <div className='relative z-10 w-full max-w-md rounded-3xl bg-gradient-to-b from-white/90 via-white/70 to-white/40 dark:from-zinc-900/90 dark:via-zinc-900/70 dark:to-zinc-900/40 backdrop-blur-xl shadow-2xl p-10 dark:border dark:border-zinc-800'>
-          <h1 className='text-green-600 tracking-tight text-center text-3xl font-extrabold mb-8 bg-clip-text drop-shadow-sm'>
-            {siteName}
-          </h1>
-          <div className='flex justify-center my-10'>
-            <div className='animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-green-500' />
-          </div>
-          <p className='text-gray-700 dark:text-gray-300 font-medium text-lg text-center'>
-            正在验证您的身份，请稍候...
-          </p>
-        </div>
-      </div>
-    );
-  } else {
+      const password = localStorage.getItem('password');
+      const username = localStorage.getItem('username');
+      const fullPath =
+        window.location.pathname + window.location.search;
+
+      // 如果本地没有凭证，直接标记为未认证并跳转
+      if (!password) {
+        setAuthStatus('unauthenticated');
+        router.replace(`/login?redirect=${encodeURIComponent(fullPath)}`);
+        return;
+      }
+
+      // 如果有凭证，则在后台静默验证
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password, username }),
+        });
+
+        if (res.ok) {
+          // 验证成功
+          setAuthStatus('authenticated');
+        } else {
+          // 凭证失效
+          throw new Error('认证失败');
+        }
+      } catch (error) {
+        // 任何错误都视为未认证
+        localStorage.removeItem('password');
+        localStorage.removeItem('username');
+        setAuthStatus('unauthenticated');
+        router.replace(`/login?redirect=${encodeURIComponent(fullPath)}`);
+      }
+    };
+
+    verifyAuth();
+  }, [pathname, router]); // 依赖 pathname, 每次路由变化时重新验证
+
+  // 关键改动(2): 根据状态来决定渲染什么
+  if (authStatus === 'authenticated') {
+    // 如果已认证，渲染页面内容（包括登录页本身）
     return <>{children}</>;
   }
+
+  // 在验证完成前，我们渲染一个空的、透明的占位符。
+  // 这是服务器和客户端首次渲染时匹配的UI，从而修复 hydration error。
+  // 用户对此无感知，因为它完全透明。
+  return (
+    <div
+      className='fixed inset-0 w-full h-full bg-transparent pointer-events-none'
+      aria-hidden='true'
+    />
+  );
 }
