@@ -1917,7 +1917,6 @@ const FavoriteIcon = ({ filled }: { filled: boolean }) => {
 
 // 新增：去广告图标组件
 const AdBlockIcon = ({ enabled }: { enabled: boolean }) => {
-  const color = enabled ? '#22c55e' : '#ffffff'; // Tailwind green-500 or white
   return (
     <svg
       className='h-6 w-6 vds-icon' // 略微放大尺寸
@@ -1932,20 +1931,21 @@ const AdBlockIcon = ({ enabled }: { enabled: boolean }) => {
         fontWeight='bold'
         textAnchor='middle'
         dominantBaseline='middle'
-        fill={color}
+        fill='#ffffff'
       >
         AD
       </text>
-      {/* 斜线 */}
-      <line
-        x1='4'
-        y1='4'
-        x2='28'
-        y2='28'
-        stroke={color}
-        strokeWidth='4'
-        strokeLinecap='round'
-      />
+      {enabled && (
+        <line
+          x1='4'
+          y1='4'
+          x2='28'
+          y2='28'
+          stroke='#ffffff'
+          strokeWidth='4'
+          strokeLinecap='round'
+        />
+      )}
     </svg>
   );
 };
