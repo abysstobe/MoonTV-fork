@@ -1439,7 +1439,6 @@ function PlayPageClient() {
           noGestures={true}
           slots={{
             googleCastButton: null,
-            pipButton: null,
             settingsMenu: null,
             captionButton: null,
             muteButton: null, // 隐藏静音按钮
