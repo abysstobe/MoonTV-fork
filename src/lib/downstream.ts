@@ -1,3 +1,5 @@
+// --- START OF NEW downstream.ts.txt ---
+
 import { API_CONFIG, ApiSite } from '@/lib/config';
 import { SearchResult, VideoDetail } from '@/lib/types';
 import { cleanHtmlTags } from '@/lib/utils';
@@ -75,7 +77,9 @@ export async function searchFromApi(
     const apiBaseUrl = apiSite.api;
     const apiUrl =
       apiBaseUrl + API_CONFIG.search.path + encodeURIComponent(query);
-    const apiName = apiSite.name;
+    
+    // 【修正】移除了未使用的变量 apiName，修复 ESLint 警告
+    // const apiName = apiSite.name; 
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
@@ -141,8 +145,6 @@ export async function searchFromApi(
             if (!pageData || !pageData.list || !Array.isArray(pageData.list))
               return [];
 
-            // ***【重要修复】***
-            // 此处使用与第一页相同的处理逻辑，确保分页数据正确解析
             return pageData.list.map((item: ApiSearchItem) =>
               mapApiItemToSearchResult(item, apiSite)
             );
@@ -326,3 +328,4 @@ async function handleSpecialSourceDetail(
     },
   };
 }
+// --- END OF NEW downstream.ts.txt ---
