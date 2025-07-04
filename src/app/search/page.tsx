@@ -125,6 +125,13 @@ function SearchPageClient() {
     });
   };
 
+  // 新增：处理清空搜索框的函数
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    // 清空后重新聚焦输入框
+    document.getElementById('searchInput')?.focus();
+  };
+
   return (
     <PageLayout activePath='/search'>
       <div className='px-4 sm:px-10 py-4 sm:py-8 overflow-visible mb-10'>
@@ -139,8 +146,20 @@ function SearchPageClient() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder='搜索电影、电视剧...'
-                className='w-full h-12 rounded-lg bg-gray-50/80 py-3 pl-10 pr-4 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-400 focus:bg-white border border-gray-200/50 shadow-sm dark:bg-gray-800 dark:text-gray-300 dark:placeholder-gray-500 dark:focus:bg-gray-700 dark:border-gray-700'
+                // 修改 pr-4 为 pr-10，为清除按钮留出空间
+                className='w-full h-12 rounded-lg bg-gray-50/80 py-3 pl-10 pr-10 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-400 focus:bg-white border border-gray-200/50 shadow-sm dark:bg-gray-800 dark:text-gray-300 dark:placeholder-gray-500 dark:focus:bg-gray-700 dark:border-gray-700'
               />
+              {/* 新增：清空按钮 */}
+              {searchQuery && (
+                <button
+                  type='button' // 使用 type='button' 防止提交表单
+                  onClick={handleClearSearch}
+                  className='absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors'
+                  aria-label='清空搜索'
+                >
+                  <X className='h-5 w-5' />
+                </button>
+              )}
             </div>
           </form>
         </div>
