@@ -166,3 +166,10 @@ div[data-media-provider] video {
     display: none !important;
   }
 }
+
+/* 隐藏移动端竖屏和横屏时的网页全屏按钮 */
+@media (max-width: 1024px) {
+  .art-control-fullscreenWeb {
+    display: none !important;
+  }
+}
