@@ -109,8 +109,8 @@ function PlayPageClient() {
 
   // 用于记录是否需要在播放器 ready 后跳转到指定进度
   const resumeTimeRef = useRef<number | null>(null);
-  // 上次使用的音量，默认 0.7
-  const lastVolumeRef = useRef<number>(0.7);
+  // 需求 6.4: 上次使用的音量，默认 0.5
+  const lastVolumeRef = useRef<number>(0.5);
 
   // 换源相关状态
   const [availableSources, setAvailableSources] = useState<SearchResult[]>([]);
@@ -600,45 +600,76 @@ function PlayPageClient() {
       }
     }
 
-    // 左箭头 = 快退
-    if (!e.altKey && e.key === 'ArrowLeft') {
-      if (artPlayerRef.current && artPlayerRef.current.currentTime > 5) {
-        artPlayerRef.current.currentTime -= 10;
+    // 需求 6.3: 左箭头 = 快退5秒 (无提示)
+    if (!e.altKey && !e.ctrlKey && e.key === 'ArrowLeft') {
+      if (artPlayerRef.current && artPlayerRef.current.currentTime > 0) {
+        artPlayerRef.current.seek = Math.max(
+          0,
+          artPlayerRef.current.currentTime - 5
+        );
         e.preventDefault();
       }
     }
 
-    // 右箭头 = 快进
-    if (!e.altKey && e.key === 'ArrowRight') {
+    // 需求 6.3: 右箭头 = 快进5秒 (无提示)
+    if (!e.altKey && !e.ctrlKey && e.key === 'ArrowRight') {
       if (
         artPlayerRef.current &&
-        artPlayerRef.current.currentTime < artPlayerRef.current.duration - 5
+        artPlayerRef.current.currentTime < artPlayerRef.current.duration
       ) {
-        artPlayerRef.current.currentTime += 10;
+        artPlayerRef.current.seek = Math.min(
+          artPlayerRef.current.duration,
+          artPlayerRef.current.currentTime + 5
+        );
         e.preventDefault();
       }
     }
 
-    // 上箭头 = 音量+
+    // 需求 6.3: Ctrl + 左箭头 = 快退30秒
+    if (e.ctrlKey && e.key === 'ArrowLeft') {
+      if (artPlayerRef.current && artPlayerRef.current.currentTime > 0) {
+        artPlayerRef.current.seek = Math.max(
+          0,
+          artPlayerRef.current.currentTime - 30
+        );
+        artPlayerRef.current.notice.show = '快退 30 秒';
+        e.preventDefault();
+      }
+    }
+
+    // 需求 6.3: Ctrl + 右箭头 = 快进30秒
+    if (e.ctrlKey && e.key === 'ArrowRight') {
+      if (
+        artPlayerRef.current &&
+        artPlayerRef.current.currentTime < artPlayerRef.current.duration
+      ) {
+        artPlayerRef.current.seek = Math.min(
+          artPlayerRef.current.duration,
+          artPlayerRef.current.currentTime + 30
+        );
+        artPlayerRef.current.notice.show = '快进 30 秒';
+        e.preventDefault();
+      }
+    }
+
+    // 需求 6.4: 上箭头 = 音量+
     if (e.key === 'ArrowUp') {
       if (artPlayerRef.current && artPlayerRef.current.volume < 1) {
-        artPlayerRef.current.volume =
-          Math.round((artPlayerRef.current.volume + 0.1) * 10) / 10;
+        artPlayerRef.current.volume += 0.05;
         artPlayerRef.current.notice.show = `音量: ${Math.round(
           artPlayerRef.current.volume * 100
-        )}`;
+        )}%`;
         e.preventDefault();
       }
     }
 
-    // 下箭头 = 音量-
+    // 需求 6.4: 下箭头 = 音量-
     if (e.key === 'ArrowDown') {
       if (artPlayerRef.current && artPlayerRef.current.volume > 0) {
-        artPlayerRef.current.volume =
-          Math.round((artPlayerRef.current.volume - 0.1) * 10) / 10;
+        artPlayerRef.current.volume -= 0.05;
         artPlayerRef.current.notice.show = `音量: ${Math.round(
           artPlayerRef.current.volume * 100
-        )}`;
+        )}%`;
         e.preventDefault();
       }
     }
@@ -655,6 +686,38 @@ function PlayPageClient() {
     if (e.key === 'f' || e.key === 'F') {
       if (artPlayerRef.current) {
         artPlayerRef.current.fullscreen = !artPlayerRef.current.fullscreen;
+        e.preventDefault();
+      }
+    }
+
+    // 需求 6.1: M键 = 静音/取消静音
+    if (e.key === 'm' || e.key === 'M') {
+      if (artPlayerRef.current) {
+        artPlayerRef.current.muted = !artPlayerRef.current.muted;
+        artPlayerRef.current.notice.show = artPlayerRef.current.muted
+          ? '已静音'
+          : '音量恢复';
+        e.preventDefault();
+      }
+    }
+
+    // 需求 6.2: 倍速控制
+    if (artPlayerRef.current) {
+      let currentRate = artPlayerRef.current.playbackRate;
+      let changed = false;
+      if (e.key === 'c' || e.key === 'C') {
+        currentRate = Math.min(2, currentRate + 0.25);
+        changed = true;
+      } else if (e.key === 'x' || e.key === 'X') {
+        currentRate = Math.max(0.75, currentRate - 0.25);
+        changed = true;
+      } else if (e.key === 'z' || e.key === 'Z') {
+        currentRate = 1;
+        changed = true;
+      }
+      if (changed) {
+        artPlayerRef.current.playbackRate = currentRate;
+        artPlayerRef.current.notice.show = `倍速: ${currentRate.toFixed(2)}x`;
         e.preventDefault();
       }
     }
@@ -854,18 +917,18 @@ function PlayPageClient() {
 
     try {
       // 创建新的播放器实例
-      Artplayer.PLAYBACK_RATE = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
+      Artplayer.PLAYBACK_RATE = [3, 2, 1.5, 1.25, 1, 0.75];
       Artplayer.USE_RAF = true;
 
       artPlayerRef.current = new Artplayer({
         container: artRef.current,
         url: videoUrl,
         poster: videoCover,
-        volume: 0.7,
+        volume: 0.5, // 需求 6.4: 初始音量改为 50%
         isLive: false,
         muted: false,
         autoplay: true,
-        pip: true,
+        pip: false,
         autoSize: false,
         autoMini: false,
         screenshot: false,
@@ -875,7 +938,7 @@ function PlayPageClient() {
         playbackRate: true,
         aspectRatio: false,
         fullscreen: true,
-        fullscreenWeb: false,
+        fullscreenWeb: true,
         subtitleOffset: false,
         miniProgressBar: true,
         mutex: true,
@@ -948,9 +1011,9 @@ function PlayPageClient() {
         },
         settings: [
           {
-            html: blockAdEnabled ? '关闭去广告' : '开启去广告',
+            html: blockAdEnabled ? '广告过滤      已开启' : '广告过滤      已关闭',
             icon: '<text x="50%" y="50%" font-size="20" font-weight="bold" text-anchor="middle" dominant-baseline="middle" fill="#ffffff">AD</text>',
-            tooltip: blockAdEnabled ? '当前开启' : '当前关闭',
+            tooltip: blockAdEnabled ? '' : '',
             onClick() {
               const newVal = !blockAdEnabled;
               try {
@@ -986,6 +1049,35 @@ function PlayPageClient() {
             },
           },
         ],
+        layers: [
+          {
+            name: 'playback-rates-panel',
+            html: `
+              <style>
+                .rate-option { color: white; padding: 5px 10px; cursor: pointer; width: 100%; text-align: center; }
+                .rate-option:hover { background-color: rgba(255,255,255,0.2); }
+              </style>
+              <div style="display: flex; flex-direction: column; align-items: center; width: 60px;">
+                <div class="rate-option" data-rate="3">3.0x</div>
+                <div class="rate-option" data-rate="2">2.0x</div>
+                <div class="rate-option" data-rate="1.5">1.5x</div>
+                <div class="rate-option" data-rate="1.25">1.25x</div>
+                <div class="rate-option" data-rate="1">1.0x</div>
+                <div class="rate-option" data-rate="0.75">0.75x</div>
+              </div>
+            `,
+            style: {
+              position: 'absolute',
+              right: '60px',
+              bottom: '45px',
+              backgroundColor: 'rgba(0,0,0,0.7)',
+              padding: '5px',
+              borderRadius: '5px',
+              display: 'none',
+            },
+
+          },
+        ],
       });
 
       // 监听播放器事件
@@ -996,6 +1088,7 @@ function PlayPageClient() {
       artPlayerRef.current.on('video:volumechange', () => {
         lastVolumeRef.current = artPlayerRef.current.volume;
       });
+
 
       // 监听视频可播放事件，这时恢复播放进度更可靠
       artPlayerRef.current.on('video:canplay', () => {
@@ -1117,6 +1210,9 @@ function PlayPageClient() {
     return () => {
       if (saveIntervalRef.current) {
         clearInterval(saveIntervalRef.current);
+      }
+      if (longPressTimeoutRef.current) {
+        clearTimeout(longPressTimeoutRef.current);
       }
     };
   }, []);
@@ -1365,20 +1461,30 @@ function PlayPageClient() {
   return (
     <PageLayout activePath='/play'>
       <div className='flex flex-col gap-3 py-4 px-5 lg:px-10 xl:px-20'>
-        {/* 第一行：影片标题 */}
-        <div className='py-1'>
-          <h1 className='text-xl font-semibold text-gray-900 dark:text-gray-100'>
-            {videoTitle || '影片标题'}
+        {/* BUG 1 修复: 调整标题和收藏按钮的布局容器 */}
+        <div className='py-1 flex items-center gap-3'>
+          <h1 className='text-xl font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-3'>
+            <span>{videoTitle || '影片标题'}</span>
             {totalEpisodes > 1 && (
               <span className='text-gray-500 dark:text-gray-400'>
-                {` > 第 ${currentEpisodeIndex + 1} 集`}
+                {`> 第 ${currentEpisodeIndex + 1} 集`}
               </span>
             )}
           </h1>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleToggleFavorite();
+            }}
+            className='flex-shrink-0 hover:opacity-80 transition-opacity'
+            title={favorited ? '取消收藏' : '收藏'}
+          >
+            <FavoriteIcon filled={favorited} />
+          </button>
         </div>
         {/* 第二行：播放器和选集 */}
         <div className='space-y-2'>
-          {/* 折叠控制 - 仅在 lg 及以上屏幕显示 */}
+          {/* 折叠控制 - 仅在 lg 及以上屏幕有效 */}
           <div className='hidden lg:flex justify-end'>
             <button
               onClick={() =>
@@ -1407,29 +1513,20 @@ function PlayPageClient() {
               <span className='text-xs font-medium text-gray-600 dark:text-gray-300'>
                 {isEpisodeSelectorCollapsed ? '显示' : '隐藏'}
               </span>
-
-              {/* 精致的状态指示点 */}
-              <div
-                className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full transition-all duration-200 ${
-                  isEpisodeSelectorCollapsed
-                    ? 'bg-orange-400 animate-pulse'
-                    : 'bg-green-400'
-                }`}
-              ></div>
             </button>
           </div>
-
+          {/* BUG 2 修复: 调整网格布局以使播放器更宽 */}
           <div
-            className={`grid gap-4 lg:h-[500px] xl:h-[650px] transition-all duration-300 ease-in-out ${
+            className={`grid gap-4 lg:h-[600px] xl:h-[750px] transition-all duration-300 ease-in-out ${
               isEpisodeSelectorCollapsed
                 ? 'grid-cols-1'
-                : 'grid-cols-1 md:grid-cols-4'
+                : 'grid-cols-1 lg:grid-cols-6'
             }`}
           >
             {/* 播放器 */}
             <div
               className={`h-full transition-all duration-300 ease-in-out ${
-                isEpisodeSelectorCollapsed ? 'col-span-1' : 'md:col-span-3'
+                isEpisodeSelectorCollapsed ? 'col-span-1' : 'lg:col-span-5'
               }`}
             >
               <div
@@ -1442,8 +1539,8 @@ function PlayPageClient() {
             <div
               className={`h-[300px] lg:h-full md:overflow-hidden transition-all duration-300 ease-in-out ${
                 isEpisodeSelectorCollapsed
-                  ? 'md:col-span-1 lg:hidden lg:opacity-0 lg:scale-95'
-                  : 'md:col-span-1 lg:opacity-100 lg:scale-100'
+                  ? 'lg:col-span-1 lg:hidden lg:opacity-0 lg:scale-95'
+                  : 'lg:col-span-1 lg:opacity-100 lg:scale-100'
               }`}
             >
               <EpisodeSelector
@@ -1458,75 +1555,8 @@ function PlayPageClient() {
                 onSearchSources={handleSearchSources}
                 sourceSearchLoading={sourceSearchLoading}
                 sourceSearchError={sourceSearchError}
+                videoDetail={detail}
               />
-            </div>
-          </div>
-        </div>
-
-        {/* 详情展示 */}
-        <div className='grid grid-cols-1 md:grid-cols-4 gap-4'>
-          {/* 文字区 */}
-          <div className='md:col-span-3'>
-            <div className='p-6 flex flex-col min-h-0'>
-              {/* 标题 */}
-              <h1 className='text-3xl font-bold mb-2 tracking-wide flex items-center flex-shrink-0 text-center md:text-left w-full'>
-                {videoTitle || '影片标题'}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleToggleFavorite();
-                  }}
-                  className='ml-3 flex-shrink-0 hover:opacity-80 transition-opacity'
-                >
-                  <FavoriteIcon filled={favorited} />
-                </button>
-              </h1>
-
-              {/* 关键信息行 */}
-              <div className='flex flex-wrap items-center gap-3 text-base mb-4 opacity-80 flex-shrink-0'>
-                {detail?.class && (
-                  <span className='text-green-600 font-semibold'>
-                    {detail.class}
-                  </span>
-                )}
-                {(detail?.year || videoYear) && (
-                  <span>{detail?.year || videoYear}</span>
-                )}
-                {detail?.source_name && (
-                  <span className='border border-gray-500/60 px-2 py-[1px] rounded'>
-                    {detail.source_name}
-                  </span>
-                )}
-                {detail?.type_name && <span>{detail.type_name}</span>}
-              </div>
-              {/* 剧情简介 */}
-              {detail?.desc && (
-                <div
-                  className='mt-0 text-base leading-relaxed opacity-90 overflow-y-auto pr-2 flex-1 min-h-0 scrollbar-hide'
-                  style={{ whiteSpace: 'pre-line' }}
-                >
-                  {detail.desc}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* 封面展示 */}
-          <div className='hidden md:block md:col-span-1 md:order-first'>
-            <div className='pl-0 py-4 pr-6'>
-              <div className='bg-gray-300 dark:bg-gray-700 aspect-[3/4] flex items-center justify-center rounded-xl overflow-hidden'>
-                {videoCover ? (
-                  <img
-                    src={videoCover}
-                    alt={videoTitle}
-                    className='w-full h-full object-cover'
-                  />
-                ) : (
-                  <span className='text-gray-600 dark:text-gray-400'>
-                    封面图片
-                  </span>
-                )}
-              </div>
             </div>
           </div>
         </div>
