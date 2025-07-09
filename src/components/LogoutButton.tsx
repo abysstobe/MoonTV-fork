@@ -23,12 +23,6 @@ export const LogoutButton: React.FC = () => {
       console.error('注销请求失败:', error);
     }
 
-    // 清除localStorage中的认证信息（向后兼容）
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('password');
-      localStorage.removeItem('username');
-    }
-
     window.location.reload();
   };
 

@@ -46,14 +46,6 @@ function LoginPageClient() {
       });
 
       if (res.ok) {
-        // API 已经设置了认证cookie，这里只保存到localStorage用于向后兼容
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('password', password);
-          if (shouldAskUsername) {
-            localStorage.setItem('username', username);
-          }
-        }
-
         const redirect = searchParams.get('redirect') || '/';
         router.replace(redirect);
       } else if (res.status === 401) {
@@ -83,12 +75,6 @@ function LoginPageClient() {
       });
 
       if (res.ok) {
-        // API 已经设置了认证cookie，这里只保存到localStorage用于向后兼容
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('password', password);
-          localStorage.setItem('username', username);
-        }
-
         const redirect = searchParams.get('redirect') || '/';
         router.replace(redirect);
       } else {

@@ -2,6 +2,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
+import { getAuthInfoFromCookie } from '@/lib/auth';
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -91,28 +93,6 @@ async function verifySignature(
   } catch (error) {
     console.error('签名验证失败:', error);
     return false;
-  }
-}
-
-// 从cookie获取认证信息
-function getAuthInfoFromCookie(request: NextRequest): {
-  password?: string;
-  username?: string;
-  signature?: string;
-  timestamp?: number;
-} | null {
-  const authCookie = request.cookies.get('auth');
-
-  if (!authCookie) {
-    return null;
-  }
-
-  try {
-    const decoded = decodeURIComponent(authCookie.value);
-    const authData = JSON.parse(decoded);
-    return authData;
-  } catch (error) {
-    return null;
   }
 }
 
