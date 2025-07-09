@@ -9,12 +9,14 @@ import React, {
   useState,
 } from 'react';
 
+// 修正：从正确的客户端定义文件中导入 VideoDetail 类型
+import type { VideoDetail } from '@/lib/fetchVideoDetail.client';
 import { SearchResult } from '@/lib/types';
 
 interface EpisodeSelectorProps {
   /** 总集数 */
   totalEpisodes: number;
-  /** 每页显示多少集，默认 50 */
+  /** 每页显示多少集，默认 100 */
   episodesPerPage?: number;
   /** 当前选中的集数（1 开始） */
   value?: number;
@@ -30,6 +32,8 @@ interface EpisodeSelectorProps {
   onSearchSources?: (query: string) => void;
   sourceSearchLoading?: boolean;
   sourceSearchError?: string | null;
+  /** 视频详情，用于简介面板 */
+  videoDetail: VideoDetail | null;
 }
 
 /**
@@ -37,7 +41,7 @@ interface EpisodeSelectorProps {
  */
 const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   totalEpisodes,
-  episodesPerPage = 50,
+  episodesPerPage = 100, // 需求 3: 从 50 改为 100
   value = 1,
   onChange,
   onSourceChange,
@@ -48,15 +52,15 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   onSearchSources,
   sourceSearchLoading = false,
   sourceSearchError = null,
+  videoDetail, // 需求 2: 接收视频详情
 }) => {
   const router = useRouter();
   const pageCount = Math.ceil(totalEpisodes / episodesPerPage);
 
-  // 主要的 tab 状态：'episodes' 或 'sources'
-  // 当只有一集时默认展示 "换源"，并隐藏 "选集" 标签
-  const [activeTab, setActiveTab] = useState<'episodes' | 'sources'>(
-    totalEpisodes > 1 ? 'episodes' : 'sources'
-  );
+  // 需求 2: 增加 'introduction' 选项
+  const [activeTab, setActiveTab] = useState<
+    'episodes' | 'sources' | 'introduction'
+  >(totalEpisodes > 1 ? 'episodes' : 'introduction');
 
   // 当前分页索引（0 开始）
   const initialPage = Math.floor((value - 1) / episodesPerPage);
@@ -169,6 +173,19 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
         >
           换源
         </div>
+        {/* 需求 2: 新增简介 Tab */}
+        <div
+          onClick={() => setActiveTab('introduction')}
+          className={`flex-1 py-3 px-6 text-center cursor-pointer transition-all duration-200 font-medium
+            ${
+              activeTab === 'introduction'
+                ? 'text-green-500 dark:text-green-400'
+                : 'text-gray-700 hover:text-green-600 bg-black/5 dark:bg-white/5 dark:text-gray-300 dark:hover:text-green-400 hover:bg-black/3 dark:hover:bg-white/3'
+            }
+          `.trim()}
+        >
+          简介
+        </div>
       </div>
 
       {/* 选集 Tab 内容 */}
@@ -187,7 +204,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                         buttonRefs.current[idx] = el;
                       }}
                       onClick={() => handleCategoryClick(idx)}
-                      className={`w-20 relative py-2 text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 text-center 
+                      className={`w-20 relative py-2 text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 text-center
                         ${
                           isActive
                             ? 'text-green-500 dark:text-green-400'
@@ -242,7 +259,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                 <button
                   key={episodeNumber}
                   onClick={() => handleEpisodeClick(episodeNumber - 1)}
-                  className={`h-10 flex items-center justify-center text-sm font-medium rounded-md transition-all duration-200 
+                  className={`h-10 flex items-center justify-center text-sm font-medium rounded-md transition-all duration-200
                     ${
                       isActive
                         ? 'bg-green-500 text-white shadow-lg shadow-green-500/25 dark:bg-green-600'
@@ -319,7 +336,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                         onClick={() =>
                           !isCurrentSource && handleSourceClick(source)
                         }
-                        className={`flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-all duration-200 
+                        className={`flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-all duration-200
                       ${
                         isCurrentSource
                           ? 'bg-green-500/10 dark:bg-green-500/20 border-green-500/30 border'
@@ -380,6 +397,52 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                 </div>
               </div>
             )}
+        </div>
+      )}
+
+      {/* 需求 2: 新增简介面板 */}
+      {activeTab === 'introduction' && (
+        <div className='flex-1 overflow-y-auto mt-4 px-2 space-y-4 pb-4'>
+          {videoDetail ? (
+            <>
+              <div className='w-2/3 mx-auto aspect-[3/4] rounded-lg overflow-hidden bg-gray-200 dark:bg-gray-700 shadow-lg'>
+                <img
+                  src={videoDetail.poster}
+                  alt={videoDetail.title}
+                  className='w-full h-full object-cover'
+                  referrerPolicy='no-referrer'
+                />
+              </div>
+              <div className='text-gray-900 dark:text-gray-100'>
+                <h2 className='text-xl font-bold text-center'>
+                  {videoDetail.title}
+                </h2>
+                <div className='flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-gray-400 my-2'>
+                  {videoDetail.year && <span>{videoDetail.year}</span>}
+                  {videoDetail.class && <span>{videoDetail.class}</span>}
+                  {videoDetail.type_name && (
+                    <span>{videoDetail.type_name}</span>
+                  )}
+                  {videoDetail.source_name && (
+                    <span className='border border-gray-500/60 px-2 py-[1px] rounded'>
+                      {videoDetail.source_name}
+                    </span>
+                  )}
+                </div>
+                {/* BUG 4 修复: 调整简介文字大小 */}
+                <p
+                  className='text-base text-gray-700 dark:text-gray-300 leading-relaxed'
+                  style={{ whiteSpace: 'pre-line' }}
+                >
+                  {videoDetail.desc}
+                </p>
+              </div>
+            </>
+          ) : (
+            <div className='text-center text-gray-500 py-8'>
+              暂无简介信息
+            </div>
+          )}
         </div>
       )}
     </div>
