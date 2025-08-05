@@ -169,7 +169,7 @@ function PlayPageClient() {
         }
       }
     }
-    return true;
+    return false;
   });
 
   // 保存优选时的测速结果，避免EpisodeSelector重复测速
@@ -1222,18 +1222,18 @@ function PlayPageClient() {
 
     try {
       // 创建新的播放器实例
-      Artplayer.PLAYBACK_RATE = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
+      Artplayer.PLAYBACK_RATE = [3, 2, 1.5, 1.25, 1, 0.75, 0.5];
       Artplayer.USE_RAF = true;
 
       artPlayerRef.current = new Artplayer({
         container: artRef.current,
         url: videoUrl,
         poster: videoCover,
-        volume: 0.7,
+        volume: 0.5,
         isLive: false,
         muted: false,
         autoplay: true,
-        pip: true,
+        pip: false,
         autoSize: false,
         autoMini: false,
         screenshot: false,
